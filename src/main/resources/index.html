@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Private Messaging</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        #status {
+            margin-bottom: 10px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+<h1>WebSocket Private Messaging</h1>
+<div id="status">Status: Disconnected</div>
+<div id="messages"></div>
+<form id="sendForm">
+    <input type="text" id="message" placeholder="Type a message" required />
+    <button type="submit">Send</button>
+</form>
+
+<script>
+    let stompClient = null;
+    let username = "quanglv5"; // Đặt username để backend sử dụng
+
+    function connect() {
+        const socket = new SockJS('http://localhost:8115/ws'); // WebSocket endpoint
+        stompClient = Stomp.over(socket);
+        const headers = { username: 'quanglv5' }; // Thay thế bằng username của bạn
+        // Kết nối với WebSocket server
+        stompClient.connect( headers , function (frame) {
+            document.getElementById("status").textContent = "Status: Connected";
+            console.log('Connected: ' + frame);
+
+            // Subscribe tới endpoint /user/queue/messages để nhận tin nhắn
+            stompClient.subscribe('/user/queue/messages', function (messageOutput) {
+                const message = messageOutput.body; // Nội dung tin nhắn từ server
+                console.log("Message received: " + message);
+                displayMessage("Server", message);
+            });
+        }, function (error) {
+            document.getElementById("status").textContent = "Status: Disconnected";
+            console.error("Connection error:", error);
+        });
+    }
+
+    function sendMessage(message) {
+        // Gửi message qua API backend
+        fetch('http://localhost:8115/send-private-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                recipient: username, // Người nhận chính là username
+                message: message
+            })
+        })
+            .then(response => response.text())
+            .then(data => {
+                console.log(data);
+                displayMessage("You", message);
+            })
+            .catch(error => console.error('Error sending message:', error));
+    }
+
+    function displayMessage(sender, message) {
+        const messagesDiv = document.getElementById("messages");
+        const messageElement = document.createElement("div");
+        messageElement.textContent = `${sender}: ${message}`;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Tự động cuộn xuống cuối
+    }
+
+    // Xử lý sự kiện gửi tin nhắn từ form
+    document.getElementById("sendForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const message = document.getElementById("message").value;
+        if (message) {
+            sendMessage(message);
+            document.getElementById("message").value = ''; // Xóa nội dung ô nhập
+        }
+    });
+
+    // Kết nối WebSocket khi tải trang
+    connect();
+</script>
+</body>
+</html>
